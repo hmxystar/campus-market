@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.market.mapper.ProductMapper">
+
+    <select id="selectCardPage" resultType="com.campus.market.vo.ProductCardVO">
+        SELECT p.id, p.title, p.price, p.cover, p.view_count,
+               p.create_time, u.nickname AS sellerName
+        FROM product p
+        JOIN user u ON u.id = p.user_id
+        WHERE p.deleted = 0
+          AND p.status = 1
+        <if test="categoryId != null">
+            AND p.category_id = #{categoryId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND p.title LIKE CONCAT('%', #{keyword}, '%')
+        </if>
+        <choose>
+            <when test="sort == 'priceAsc'">ORDER BY p.price ASC</when>
+            <when test="sort == 'priceDesc'">ORDER BY p.price DESC</when>
+            <when test="sort == 'hot'">ORDER BY p.view_count DESC</when>
+            <otherwise>ORDER BY p.create_time DESC</otherwise>
+        </choose>
+    </select>
+
+    <!-- 条件里带 status = 1 AND stock > 0，靠数据库行锁保证不超卖 -->
+    <update id="deductStock">
+        UPDATE product
+        SET stock = stock - 1, status = 3, update_time = NOW()
+        WHERE id = #{id} AND status = 1 AND stock &gt; 0
+    </update>
+
+    <update id="restoreStock">
+        UPDATE product
+        SET stock = stock + 1, status = 1, update_time = NOW()
+        WHERE id = #{id} AND deleted = 0
+    </update>
+</mapper>
