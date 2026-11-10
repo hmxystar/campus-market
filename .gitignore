@@ -5,3 +5,4 @@ upload/*
 mysql-data/
 redis-data/
 campus-market-web/dist/
+.env

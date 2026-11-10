@@ -48,7 +48,7 @@ campus-market
 
 1. **建库建表**：DBeaver 或命令行执行 `sql/init.sql`（自动建 `campus_market` 库、7 张表、初始分类与演示账号）。
 2. **起 Redis**：`docker run -d --name cm-redis -p 6379:6379 redis:latest`（本机 Docker Hub 连不上，用本地已有的 `redis:latest`，实测版本就是 8.10.3）
-3. **数据库口令**：本机 MySQL 用 `root/123456`，`application.yml` 与 `application-dev.yml` 已按此配置。
+3. **数据库口令**：配置里用的是占位写法 `${DB_PASSWORD:123456}` —— 不设环境变量时默认走 `123456`，所以你本机直接能跑；要换密码就设置环境变量 `DB_PASSWORD`（或复制 `.env.example` 为 `.env` 后修改），不用改代码。JWT 密钥同理，用 `JWT_SECRET` 覆盖。
 4. **运行**：IDEA 里选中 `CampusMarketApplication` 点 Run，看到 `Tomcat started on port 8080` 即成功；浏览器打开 `http://localhost:8080/swagger-ui.html`。
 
 ```bash

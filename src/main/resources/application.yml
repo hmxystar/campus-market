@@ -9,8 +9,8 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/campus_market?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: 123456
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
     hikari:
       maximum-pool-size: 20        # 连接池上限：并发高时别让数据库被压垮
       minimum-idle: 5
@@ -47,8 +47,8 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 jwt:
-  # HS256 要求密钥至少 32 字节，课程里先用固定串，上线务必换成环境变量
-  secret: campus-market-jwt-secret-key-must-be-32-bytes-at-least
+  # HS256 要求密钥至少 32 字节；这里的默认值仅供本地开发，线上务必通过环境变量 JWT_SECRET 覆盖
+  secret: ${JWT_SECRET:campus-market-jwt-secret-key-must-be-32-bytes-at-least}
   expire: 604800000                # 7 天（毫秒）
 
 file:
