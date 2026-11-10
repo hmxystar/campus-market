@@ -47,7 +47,10 @@ campus-market
 ## 二、跑起来（配合讲义第 0 章环境）
 
 1. **建库建表**：DBeaver 或命令行执行 `sql/init.sql`（自动建 `campus_market` 库、7 张表、初始分类与演示账号）。
-2. **起 Redis**：`docker run -d --name cm-redis -p 6379:6379 redis:latest`（本机 Docker Hub 连不上，用本地已有的 `redis:latest`，实测版本就是 8.10.3）
+2. **起 Redis**（两种方式，任选一种，都占 6379 端口，别同时开）
+   - Docker：`docker run -d --name cm-redis -p 6379:6379 redis:latest`（本机 Docker Hub 连不上，用本地已有的 `redis:latest`，实测版本就是 8.10.3）
+   - Windows 原生版：下载 `Redis-8.10.3-Windows-x64-cygwin-with-Service`，在解压目录内执行 `redis-server.exe redis.conf`。
+     ⚠️ 该版本是 Cygwin 编译，**不认 Windows 绝对路径**：必须 `cd` 到目录里用相对路径 `redis.conf`，或改成 Cygwin 写法 `/cygdrive/c/...`；也可用 `RedisService.exe install -c redis.conf --dir C:/redis-data` 装成 Windows 服务。验证：`redis-cli.exe ping` 返回 `PONG`。
 3. **数据库口令**：配置里用的是占位写法 `${DB_PASSWORD:123456}` —— 不设环境变量时默认走 `123456`，所以你本机直接能跑；要换密码就设置环境变量 `DB_PASSWORD`（或复制 `.env.example` 为 `.env` 后修改），不用改代码。JWT 密钥同理，用 `JWT_SECRET` 覆盖。
 4. **运行**：IDEA 里选中 `CampusMarketApplication` 点 Run，看到 `Tomcat started on port 8080` 即成功；浏览器打开 `http://localhost:8080/swagger-ui.html`。
 
