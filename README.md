@@ -1,137 +1,189 @@
-# campus-market 后端工程骨架
+# Campus Market
 
-按《校园集市项目实战教程（第二版）· Spring Boot 4.1.2》第 3–4 章的目录结构与依赖清单，把「工程立起来 + 基础设施一次搭好」这部分**提前落成可编辑的代码**，其余业务模块留出完整签名和骨架，方便按章节逐个填。
-
-- 技术基准：Spring Boot 4.1.2 / JDK 21 / MyBatis-Plus 3.5.18 / MySQL 26.10 / Redis 8.10.3 / springdoc 3.2.0 / jjwt 0.12.6
-- 包名：`com.campus.market`，坐标 `com.campus:campus-market:1.0.0`
-- 状态：结构与依赖完整，**未做编译验证**（按你的要求只保证骨架完整）
+校园二手交易平台后端服务，基于 Spring Boot 4 构建，提供用户认证、商品发布与检索、分类管理、订单交易、收藏以及后台审核等能力。
 
 ---
 
-## 一、目录结构
+## 技术栈
+
+| 类别 | 选型 |
+|---|---|
+| 基础框架 | Spring Boot 4.1.2 |
+| 运行环境 | JDK 21 |
+| 数据访问 | MyBatis-Plus 3.5.18 |
+| 数据库 | MySQL 8.x |
+| 缓存 | Redis 8.x |
+| 安全 | Spring Security Crypto（BCrypt） + JJWT 0.12.6 |
+| 接口文档 | SpringDoc OpenAPI 3.2.0 |
+| 构建工具 | Maven 3.9+ |
+
+---
+
+## 功能模块
+
+| 模块 | 能力 |
+|---|---|
+| 用户 | 注册（BCrypt 加密）、登录（JWT 签发）、获取当前用户信息 |
+| 商品 | 发布、分页列表、详情（Cache Aside 缓存）、编辑、上架 / 下架 |
+| 分类 | 两级分类树查询 |
+| 订单 | 下单（分布式锁 + 原子扣减库存）、支付、取消、完成、我的订单、超时自动取消 |
+| 收藏 | 收藏、取消收藏、我的收藏列表 |
+| 后台管理 | 用户列表、待审核商品、商品审核通过 / 驳回 |
+| 基础设施 | 统一响应体、全局异常处理、参数校验、操作日志、接口限流、定时任务、文件上传 |
+
+---
+
+## 项目结构
 
 ```
 campus-market
-├── pom.xml                    # 依赖与版本基准（讲义 3.3）
-├── sql/init.sql               # 建库建表 + 初始分类/账号（讲义 2.4）
-├── Dockerfile                 # 多阶段构建（讲义 12.2）
-├── docker-compose.yml         # MySQL + Redis + app + Nginx（讲义 12.4）
-├── nginx.conf                 # 静态托管 + /api 反向代理（讲义 12.3）
-├── upload/                    # 本地图片落盘目录（file.upload-path）
+├── pom.xml
+├── sql/init.sql                 # 建库建表与初始数据
+├── Dockerfile                   # 多阶段镜像构建
+├── docker-compose.yml           # MySQL + Redis + 应用 + Nginx
+├── nginx.conf                   # 静态资源托管与 /api 反向代理
+├── .env.example                 # 环境变量样例
+├── upload/                      # 图片上传落盘目录
 └── src/main
     ├── java/com/campus/market
-    │   ├── CampusMarketApplication.java   # @EnableAsync @EnableScheduling @MapperScan
-    │   ├── common/       Result、PageResult、BusinessException、GlobalExceptionHandler、UserContext、ProductStatus、OrderStatus
-    │   ├── config/       MybatisPlusConfig、MyMetaObjectHandler、RedisConfig、WebMvcConfig、AsyncConfig、OpenApiConfig
-    │   ├── annotation/   @RequireLogin @RequireAdmin @RateLimit @OperationLog
-    │   ├── interceptor/  AuthInterceptor
-    │   ├── aspect/       OperationLogAspect、RateLimitAspect
-    │   ├── entity/       BaseEntity + User / Category / Product / Order / Favorite / BrowseHistory / OperationLogEntity
-    │   ├── mapper/       7 个 Mapper（ProductMapper 带 3 个自定义方法）
-    │   ├── service/      6 个接口 + impl
-    │   ├── controller/   User / Product / Category / Order / Favorite / Admin
-    │   ├── dto/          RegisterDTO、LoginDTO、ProductCreateDTO、OrderCreateDTO
-    │   ├── vo/           LoginVO、UserVO、ProductCardVO、ProductDetailVO、CategoryVO、OrderVO
-    │   ├── task/         OrderTimeoutTask、ViewCountFlushTask
-    │   └── util/         JwtUtil、RedisUtil、RedisLock
+    │   ├── CampusMarketApplication.java
+    │   ├── common/              # Result、PageResult、BusinessException、GlobalExceptionHandler、UserContext、状态枚举
+    │   ├── config/              # MybatisPlus、Redis、WebMvc、Async、OpenApi 配置
+    │   ├── annotation/          # @RequireLogin、@RequireAdmin、@RateLimit、@OperationLog
+    │   ├── interceptor/         # AuthInterceptor
+    │   ├── aspect/              # 操作日志切面、限流切面
+    │   ├── entity/              # BaseEntity 及 7 张表实体
+    │   ├── mapper/              # 7 个 Mapper，ProductMapper 含自定义 SQL
+    │   ├── service/             # 业务接口与实现
+    │   ├── controller/          # User、Product、Category、Order、Favorite、Admin
+    │   ├── dto/ vo/             # 请求参数与响应视图对象
+    │   ├── task/                # 订单超时取消、浏览数落库
+    │   └── util/                # JwtUtil、RedisUtil、RedisLock
     └── resources
         ├── application.yml
         ├── application-dev.yml
-        └── mapper/ProductMapper.xml       # 列表联查 + 原子扣/回补库存
+        └── mapper/ProductMapper.xml
 ```
-
-共 62 个 Java 文件 + 4 个配置文件/脚本。
 
 ---
 
-## 二、跑起来（配合讲义第 0 章环境）
+## 快速开始
 
-1. **建库建表**：DBeaver 或命令行执行 `sql/init.sql`（自动建 `campus_market` 库、7 张表、初始分类与演示账号）。
-2. **起 Redis**（两种方式，任选一种，都占 6379 端口，别同时开）
-   - Docker：`docker run -d --name cm-redis -p 6379:6379 redis:latest`（本机 Docker Hub 连不上，用本地已有的 `redis:latest`，实测版本就是 8.10.3）
-   - Windows 原生版：下载 `Redis-8.10.3-Windows-x64-cygwin-with-Service`，在解压目录内执行 `redis-server.exe redis.conf`。
-     ⚠️ 该版本是 Cygwin 编译，**不认 Windows 绝对路径**：必须 `cd` 到目录里用相对路径 `redis.conf`，或改成 Cygwin 写法 `/cygdrive/c/...`；也可用 `RedisService.exe install -c redis.conf --dir C:/redis-data` 装成 Windows 服务。验证：`redis-cli.exe ping` 返回 `PONG`。
-3. **数据库口令**：配置里用的是占位写法 `${DB_PASSWORD:123456}` —— 不设环境变量时默认走 `123456`，所以你本机直接能跑；要换密码就设置环境变量 `DB_PASSWORD`（或复制 `.env.example` 为 `.env` 后修改），不用改代码。JWT 密钥同理，用 `JWT_SECRET` 覆盖。
-4. **运行**：IDEA 里选中 `CampusMarketApplication` 点 Run，看到 `Tomcat started on port 8080` 即成功；浏览器打开 `http://localhost:8080/swagger-ui.html`。
+### 环境要求
+
+- JDK 21 及以上
+- MySQL 8.0 及以上
+- Redis 7.0 及以上
+- Maven 3.9 及以上
+
+### 1. 初始化数据库
+
+执行 `sql/init.sql`，自动创建 `campus_market` 库、7 张数据表及初始分类与演示账号。
 
 ```bash
-# 命令行等价操作
+mysql -u root -p < sql/init.sql
+```
+
+### 2. 启动 Redis
+
+任选一种方式，二者均占用 6379 端口，请勿同时启动。
+
+**Docker：**
+
+```bash
+docker run -d --name cm-redis -p 6379:6379 redis:latest
+```
+
+**Windows 原生版：**
+
+```powershell
+cd <Redis 安装目录>
+.\redis-server.exe redis.conf
+```
+
+> 该发行版基于 Cygwin 编译，参数中的路径需使用相对路径或 `/cygdrive/c/...` 格式，直接传入 Windows 绝对路径会导致启动失败。也可通过 `RedisService.exe install -c redis.conf --dir C:/redis-data` 注册为系统服务。
+
+验证：`redis-cli ping` 返回 `PONG`。
+
+### 3. 配置
+
+数据库账号与 JWT 密钥均通过环境变量注入，未设置时使用开发环境默认值：
+
+| 环境变量 | 说明 | 默认值 |
+|---|---|---|
+| `DB_USERNAME` | 数据库用户名 | `root` |
+| `DB_PASSWORD` | 数据库密码 | `123456` |
+| `JWT_SECRET` | JWT 签名密钥（HS256，不少于 32 字节） | 内置开发用默认值 |
+
+```bash
+cp .env.example .env   # 按实际环境修改
+```
+
+### 4. 启动
+
+在 IDE 中运行 `CampusMarketApplication`，或使用命令行：
+
+```bash
+mvn spring-boot:run
+```
+
+启动成功后控制台输出 `Tomcat started on port 8080`。
+
+### 5. 打包部署
+
+```bash
 mvn clean package -DskipTests
 java -jar target/campus-market-1.0.0.jar
 ```
 
----
+容器化部署：
 
-## 三、哪些已经写好了，哪些还要你填
-
-| 模块 | 骨架状态 | 说明 |
-|---|---|---|
-| 统一返回 / 异常 | ✅ 完整 | `Result`、`BusinessException`、4 类异常兜底 |
-| 分页 + 字段填充 | ✅ 完整 | `MybatisPlusConfig`（maxLimit 100）、`MyMetaObjectHandler` |
-| Redis 序列化 | ✅ 完整 | `GenericJacksonJsonRedisSerializer.builder()`（无参构造在 4.1.2 已移除） |
-| 鉴权链路 | ✅ 完整 | JWT 生成/解析、拦截器、ThreadLocal、`@RequireLogin` / `@RequireAdmin` |
-| 操作日志 / 限流 | ✅ 基本完整 | AOP + 注解 + Lua 原子计数；`@Async` 自调用问题见下方提示 1 |
-| 用户模块 | ✅ 完整 | 注册（BCrypt）、登录（防枚举）、`/api/user/me` |
-| 商品模块 | ✅ 主流程可用 | 发布、分页、详情 Cache Aside、编辑、下架 |
-| 分类模块 | ✅ 构树完整 | 一次查询 + 内存构树；**缓存清理留 TODO**（讲义 7.3） |
-| 订单模块 | ✅ 主流程可用 | 分布式锁 + 原子扣库存 + 状态机 + CAS 流转 |
-| 收藏模块 | ✅ 可用 | 新增/取消/我的收藏 |
-| 定时任务 | ✅ 可用 | 超时取消、浏览数落库 |
-| 管理端 | ✅ 基础接口 | 用户列表、待审核列表、审核通过/驳回 |
-| 浏览记录落库 | ⚠️ 仅实体与 Mapper | 讲义第 6 章「浏览历史」的写入逻辑待补 |
-| 前端 Vue 3 | ❌ 未包含 | 本次只交付后端骨架（讲义第 11 章自行跟做） |
-
-### 本机实测修正（2026-11-10，Windows + Boot 4.1.2 真实环境）
-
-讲义里这两处写法在真实依赖上跑不通，已在工程里改掉：
-
-| 位置 | 讲义写法 | 实际报错 | 已改为 |
-|---|---|---|---|
-| `pom.xml` 第 49 行左右 | `spring-boot-starter-aop` | `'dependencies.dependency.version' ... is missing`（Boot 4.1.2 的 BOM 里根本没有这个 artifactId） | `spring-boot-starter-aspectj` |
-| `config/RedisConfig` | `new GenericJacksonJsonRedisSerializer()` | 编译失败：该类在 Spring Data Redis 4.1.2 已不提供无参构造 | `GenericJacksonJsonRedisSerializer.builder().enableUnsafeDefaultTyping().build()` |
-
-实测结果：`mvn compile` 69 个源文件通过；`spring-boot:run` 3.8 秒启动成功，`/v3/api-docs` 暴露 17 个接口；本地 `campus_market` 7 张表齐全（root/123456）。Redis 用 `docker run -d --name cm-redis -p 6379:6379 redis:latest` 起（本地镜像 tag 虽是 latest，`INFO server` 显示 `redis_version:8.10.3`），商品详情接口连续两次 200，Redis 中确认生成 `product:detail:{id}` 与 `product:view:{id}`，改写缓存里的 title 后接口返回值同步变化，证明缓存命中与反序列化（含 `@class` 类型信息）都正常。
-
-> `enableUnsafeDefaultTyping()` 会把 `@class` 类型信息写进 JSON，这样缓存读回来才是 `ProductDetailVO` 而不是 `LinkedHashMap`。教学项目够用；若 Redis 可能被外部写入，应换成 allow-list 的 `enableDefaultTyping(validator)`。
-
-### 代码里的 TODO 集中清单
-
-- `CategoryServiceImpl#clearCache`：分类变更后删 `category:tree` 缓存
-- `ProductServiceImpl#detail`：补「空值缓存」防缓存穿透（讲义 6.5 进阶）
-- `OrderServiceImpl`：支付为模拟实现，接真实支付网关时替换 `pay()`
-- `FavoriteServiceImpl#pageMine`：批量拼装已做，若要带卖家昵称需再改联查
-- `OperationLogAspect#saveLog`：自调用 `@Async` 不生效，正式版抽独立 Bean
+```bash
+docker compose up -d --build
+```
 
 ---
 
-## 四、三个容易踩的坑（讲义已强调，骨架里已规避）
+## 接口文档
 
-1. **`@Async` 自调用无效**：`around()` 里直接调本类 `saveLog()`，不经过 Spring 代理，实际仍是同步执行。骨架保留了讲义写法并标了 TODO，正式实现请拆成独立 `OperationLogRecorder`。
-2. **多实例定时任务重复跑**：`OrderTimeoutTask` 每个实例都会扫表，两台部署会重复取消。上线前加分布式锁或单实例开关（讲义 10.3）。
-3. **分页缺 jsqlparser**：`mybatis-plus-jsqlparser` 已写进 pom，删掉它第一次分页就 `NoClassDefFoundError`。
+启动后访问 Swagger UI：`http://localhost:8080/swagger-ui.html`
 
----
+OpenAPI 描述文件：`http://localhost:8080/v3/api-docs`
 
-## 五、与讲义章节的对应关系
-
-| 讲义 | 骨架中的落点 |
+| 模块 | 接口 |
 |---|---|
-| 第 2 章 数据库设计 | `sql/init.sql` |
-| 第 3 章 工程搭建 | `pom.xml`、`application.yml`、启动类、`config/` |
-| 第 4 章 基础设施 | `common/`、`config/MybatisPlusConfig`、`config/RedisConfig`、`entity/BaseEntity` |
-| 第 5 章 用户模块 | `annotation/`、`interceptor/AuthInterceptor`、`util/JwtUtil`、User 全链路 |
-| 第 6 章 商品模块 | Product 全链路 + `ProductMapper.xml` + `FileService` |
-| 第 7 章 分类模块 | `CategoryServiceImpl`（缓存部分待补） |
-| 第 8 章 订单模块 | `OrderServiceImpl`、`util/RedisLock`、`ProductMapper#deductStock` |
-| 第 9 章 AOP | `aspect/` 两个切面 + `@OperationLog` / `@RateLimit` |
-| 第 10 章 定时任务 | `task/` 两个任务 + `config/AsyncConfig` |
-| 第 12 章 部署 | `Dockerfile`、`docker-compose.yml`、`nginx.conf` |
+| 用户 | `POST /api/user/register`、`POST /api/user/login`、`GET /api/user/me` |
+| 商品 | `GET /api/product`、`GET /api/product/{id}`、`POST /api/product` |
+| 分类 | `GET /api/category/tree` |
+| 订单 | `POST /api/order`、`POST /api/order/{orderNo}/pay`、`POST /api/order/{orderNo}/cancel`、`POST /api/order/{orderNo}/finish`、`GET /api/order/mine` |
+| 收藏 | `POST /api/favorite/{productId}`、`GET /api/favorite/mine` |
+| 文件 | `POST /api/file/upload` |
+| 后台 | `GET /api/admin/users`、`GET /api/admin/products/pending`、`POST /api/admin/product/{id}/audit` |
+
+除注册、登录及公开查询外，接口需在请求头携带 `Authorization: Bearer <token>`。
 
 ---
 
-## 六、建议的下一步
+## 设计说明
 
-1. 先把 `mvn -q -DskipTests compile` 跑通（首次会下载大量依赖，注意网络）。
-2. 按第 5 章的验收清单过一遍：注册 → 登录 → 带 token 访问 `/api/user/me` → 不带 token 返回 401。
-3. 再用 Swagger 走一遍商品发布 → 列表 → 详情 → 下单 → 取消，确认 Redis 锁与扣库存生效。
-4. 最后补前端（第 11 章）与压测（第 13 章）。
+- **鉴权**：JWT 签发与解析，拦截器统一校验，通过 ThreadLocal 传递当前用户上下文；`@RequireLogin`、`@RequireAdmin` 控制访问级别。
+- **缓存**：商品详情采用 Cache Aside 模式，浏览数通过定时任务合并写回数据库，降低热点写压力。
+- **并发控制**：下单流程使用 Redis 分布式锁，配合 SQL 原子扣减库存避免超卖；订单状态流转使用 CAS 更新。
+- **接口治理**：基于 AOP 的操作日志与限流（Redis Lua 原子计数）。
+
+---
+
+## 已知限制
+
+- 支付环节为模拟实现，接入真实支付网关时需替换 `OrderServiceImpl#pay`。
+- 分类数据变更后暂未清理 `category:tree` 缓存。
+- 商品详情未做空值缓存，极端场景下存在缓存穿透风险。
+- 浏览历史目前仅有表结构与 Mapper，写入逻辑尚未实现。
+- 后台管理仅提供基础查询与审核接口。
+- 本仓库仅包含后端服务，不含前端工程。
+
+---
+
+## License
+
+本项目仅用于学习与教学演示。
